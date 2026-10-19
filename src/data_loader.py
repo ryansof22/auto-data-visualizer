@@ -1,10 +1,15 @@
 import pandas as pd
 import io
 
-def detect_header_row(file, max_rows=10):
+def detect_header_row(file, max_rows=20, min_matches=2):
     """
     Memindai N baris pertama file Excel/CSV untuk menentukan 
     baris mana yang berisi nama kolom (header) asli.
+
+    - max_rows: berapa banyak baris awal yang akan dipindai
+    - min_matches: minimal jumlah "kata kunci header" yang harus cocok
+      pada sebuah baris agar dianggap sebagai header. Jika tidak tercapai,
+      fungsi akan mengembalikan 0 (anggap baris pertama sebagai header).
     """
     # Kata kunci umum yang biasa muncul di baris header
     header_keywords = [
@@ -24,16 +29,20 @@ def detect_header_row(file, max_rows=10):
         
         # Cek baris demi baris mana yang paling banyak memiliki kata kunci header
         for idx, row in df_temp.iterrows():
-            row_values = [str(val).upper() for val in row.values if pd.notna(val)]
+            row_values = [str(val).upper().strip() for val in row.values if pd.notna(val)]
             matches = sum(1 for val in row_values if any(kw in val for kw in header_keywords))
             
             if matches > max_matches:
                 max_matches = matches
                 header_idx = idx
                 
+        # Jika tidak ada baris yang mencapai ambang min_matches, kembalikan 0
+        if max_matches < min_matches:
+            return 0
         return header_idx
-    except Exception as e:
+    except Exception:
         return 0
+
 
 def load_data(uploaded_file):
     """
@@ -43,7 +52,10 @@ def load_data(uploaded_file):
         return None
     
     header_row = detect_header_row(uploaded_file)
-    uploaded_file.seek(0) # Reset pointer file
+    try:
+        uploaded_file.seek(0) # Reset pointer file
+    except Exception:
+        pass
     
     if uploaded_file.name.endswith('.csv'):
         df = pd.read_csv(uploaded_file, header=header_row)

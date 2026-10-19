@@ -55,6 +55,16 @@ if uploaded_file is not None:
         df, dimensions, metrics = categorize_columns(raw_df)
         std_map = get_standard_mapping(dimensions)
 
+        # Shared metric selector di sidebar agar semua komponen sinkron
+        selected_metric = None
+        if metrics:
+            selected_metric = st.sidebar.selectbox(
+                "Pilih Metrik Utama:",
+                options=metrics,
+                index=0,
+                key="main_metric_select"
+            )
+
         # Enhanced Debug panel (opsional) — tampilkan di sidebar dan di area utama
         if show_debug:
             # Sidebar debug (ringkasan)
@@ -117,8 +127,8 @@ if uploaded_file is not None:
 
         # Stage 3: Render Dashboard Visualisasi Komplit
         render_kpi_cards(df_filtered, metrics)
-        # Sinkronisasi: tangkap metrik yang dipilih di grafik dan teruskan ke breakdown/KPI per-kategori
-        selected_metric = render_primary_charts(df_filtered, std_map, metrics)
+        # Sinkronisasi: teruskan selected_metric dari sidebar ke fungsi chart dan category KPIs
+        selected_metric = render_primary_charts(df_filtered, std_map, metrics, selected_metric=selected_metric)
 
         # Rincian KPI per Kategori (opsional) - kini menggunakan selected_metric agar sinkron
         if render_category_kpis is not None:

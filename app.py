@@ -31,64 +31,83 @@ st.markdown("Unggah berkas Excel/CSV (BPS, Pemkab, Laporan Penjualan) untuk meng
 
 st.sidebar.header("📁 Ingesti Data")
 uploaded_file = st.sidebar.file_uploader(
-    "Unggah File Excel atau CSV", 
+    "Unggah File Excel atau CSV",
     type=["xlsx", "xls", "csv"]
 )
 
+# Checkbox debug dan opsi filter wilayah, supaya tidak otomatis memfilter tanpa persetujuan user
+show_debug = st.sidebar.checkbox("Tampilkan debug data (kolom, head, region)", value=False)
+apply_hierarchy_filter = st.sidebar.checkbox("Gunakan filter hierarki wilayah (opsional)", value=False)
+
 if uploaded_file is not None:
     st.sidebar.success(f"Berkas dimuat: {uploaded_file.name}")
-    
+
     # Stage 1: Load Data
     raw_df = load_data(uploaded_file)
-    
+
     if raw_df is not None:
+        # Normalisasi region/category agar tidak hanya menampilkan satu nilai karena whitespace/case mismatch
+        for col in raw_df.columns:
+            if raw_df[col].dtype == 'object':
+                raw_df[col] = raw_df[col].astype(str).str.strip()
+
         # Stage 2: Categorization & Hierarchical Filtering
         df, dimensions, metrics = categorize_columns(raw_df)
         std_map = get_standard_mapping(dimensions)
-        
-        # Filter Hierarki Otomatis (Mencegah Double Counting jika ada Kode Wilayah)
-        code_col = std_map.get('code') or 'KODE'
 
-        if filter_regional_hierarchy is not None:
+        # Debug panel (opsional)
+        if show_debug:
+            st.sidebar.markdown("---")
+            st.sidebar.write("Debug columns:", df.columns.tolist())
+            st.sidebar.write("Debug dimensions:", dimensions)
+            st.sidebar.write("Debug metrics:", metrics)
+            st.sidebar.write("Debug std_map:", std_map)
+            st.sidebar.write("Debug head:")
+            st.sidebar.write(df.head(10))
+
+            reg_col = std_map.get('region')
+            if reg_col and reg_col in df.columns:
+                st.sidebar.write("Debug unique region:")
+                st.sidebar.write(df[reg_col].astype(str).value_counts().head(20))
+
+        # Filter hierarki wilayah (hanya bila user mengaktifkan checkbox)
+        df_filtered = df.copy()
+        if apply_hierarchy_filter and filter_regional_hierarchy is not None:
             try:
-                # Signature mungkin berbeda; jika fungsi mengembalikan tuple, tangani, jika tidak, anggap mengembalikan df
-                result = filter_regional_hierarchy(df, code_col=code_col)
+                result = filter_regional_hierarchy(df_filtered, code_col=std_map.get('code') or 'KODE')
                 if isinstance(result, tuple) and len(result) >= 1:
                     df_filtered = result[0]
                 else:
                     df_filtered = result
             except Exception as e:
                 st.warning(f"filter_regional_hierarchy gagal dijalankan: {e}")
-                df_filtered = df
-        else:
-            df_filtered = df
-        
+
         # Sidebar Filter Dinamis (User Manual)
         st.sidebar.markdown("---")
         st.sidebar.header("🔍 Filter Data")
-        
+
         reg_col = std_map.get('region')
         if reg_col and reg_col in df_filtered.columns:
-            unique_regions = df_filtered[reg_col].dropna().unique().tolist()
+            unique_regions = df_filtered[reg_col].dropna().astype(str).str.strip().unique().tolist()
             selected_region = st.sidebar.multiselect(
                 f"Filter Berdasarkan {reg_col}:",
                 options=unique_regions,
                 default=[]
             )
             if selected_region:
-                df_filtered = df_filtered[df_filtered[reg_col].isin(selected_region)]
-        
+                df_filtered = df_filtered[df_filtered[reg_col].astype(str).str.strip().isin(selected_region)]
+
         # Stage 3: Render Dashboard Visualisasi Komplit
         render_kpi_cards(df_filtered, metrics)
         render_primary_charts(df_filtered, std_map, metrics)
-        
+
         # Rincian KPI per Kategori (opsional)
         if render_category_kpis is not None:
             try:
                 render_category_kpis(df_filtered, std_map, metrics)
             except Exception as e:
                 st.warning(f"render_category_kpis gagal dijalankan: {e}")
-        
+
         # Tabel Data Terstruktur & Download
         render_data_table(df_filtered)
 

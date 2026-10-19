@@ -1,8 +1,24 @@
 import streamlit as st
 import pandas as pd
 from src.data_loader import load_data
-from src.column_mapper import categorize_columns, get_standard_mapping, filter_regional_hierarchy
-from src.visualizer import render_kpi_cards, render_primary_charts, render_category_kpis, render_data_table
+from src.column_mapper import categorize_columns, get_standard_mapping
+
+# Coba impor fungsi opsional dari column_mapper dan visualizer — jika tidak ada, gunakan fallback None
+try:
+    from src.column_mapper import filter_regional_hierarchy
+except Exception as e:
+    filter_regional_hierarchy = None
+    try:
+        st.warning(f"Optional function 'filter_regional_hierarchy' tidak tersedia: {e}")
+    except Exception:
+        pass
+
+try:
+    from src.visualizer import render_kpi_cards, render_primary_charts, render_category_kpis, render_data_table
+except Exception:
+    # render_category_kpis mungkin belum ada di visualizer; impor fungsi yang pasti ada dan set fallback
+    from src.visualizer import render_kpi_cards, render_primary_charts, render_data_table
+    render_category_kpis = None
 
 st.set_page_config(
     page_title="Automated Data Visualizer",
@@ -32,7 +48,20 @@ if uploaded_file is not None:
         
         # Filter Hierarki Otomatis (Mencegah Double Counting jika ada Kode Wilayah)
         code_col = std_map.get('code') or 'KODE'
-        df_filtered, filter_status = filter_regional_hierarchy(df, code_col=code_col)
+
+        if filter_regional_hierarchy is not None:
+            try:
+                # Signature mungkin berbeda; jika fungsi mengembalikan tuple, tangani, jika tidak, anggap mengembalikan df
+                result = filter_regional_hierarchy(df, code_col=code_col)
+                if isinstance(result, tuple) and len(result) >= 1:
+                    df_filtered = result[0]
+                else:
+                    df_filtered = result
+            except Exception as e:
+                st.warning(f"filter_regional_hierarchy gagal dijalankan: {e}")
+                df_filtered = df
+        else:
+            df_filtered = df
         
         # Sidebar Filter Dinamis (User Manual)
         st.sidebar.markdown("---")
@@ -53,8 +82,12 @@ if uploaded_file is not None:
         render_kpi_cards(df_filtered, metrics)
         render_primary_charts(df_filtered, std_map, metrics)
         
-        # Rincian KPI per Kategori (Fitur Baru)
-        render_category_kpis(df_filtered, std_map, metrics)
+        # Rincian KPI per Kategori (opsional)
+        if render_category_kpis is not None:
+            try:
+                render_category_kpis(df_filtered, std_map, metrics)
+            except Exception as e:
+                st.warning(f"render_category_kpis gagal dijalankan: {e}")
         
         # Tabel Data Terstruktur & Download
         render_data_table(df_filtered)

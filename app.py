@@ -117,12 +117,13 @@ if uploaded_file is not None:
 
         # Stage 3: Render Dashboard Visualisasi Komplit
         render_kpi_cards(df_filtered, metrics)
-        render_primary_charts(df_filtered, std_map, metrics)
+        # Sinkronisasi: tangkap metrik yang dipilih di grafik dan teruskan ke breakdown/KPI per-kategori
+        selected_metric = render_primary_charts(df_filtered, std_map, metrics)
 
-        # Rincian KPI per Kategori (opsional)
+        # Rincian KPI per Kategori (opsional) - kini menggunakan selected_metric agar sinkron
         if render_category_kpis is not None:
             try:
-                render_category_kpis(df_filtered, std_map, metrics)
+                render_category_kpis(df_filtered, std_map, metrics, selected_metric=selected_metric)
             except Exception as e:
                 st.warning(f"render_category_kpis gagal dijalankan: {e}")
 

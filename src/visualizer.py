@@ -4,19 +4,18 @@ import pandas as pd
 
 def render_kpi_cards(df, metrics):
     """
-    Merender kartu KPI utama secara otomatis dari metrik angka teratas.
+    Merender kartu KPI Global di bagian atas.
     """
     if not metrics:
         return
     
-    st.subheader("📈 Indikator Utama (KPI)")
+    st.subheader("📈 Indikator Global (Agregat Total)")
     cols = st.columns(min(len(metrics), 4))
     
     for i, metric in enumerate(metrics[:4]):
         total_val = df[metric].sum()
         avg_val = df[metric].mean()
         
-        # Format tampilan angka
         if total_val >= 1_000_000:
             formatted_val = f"{total_val / 1_000_000:.2f} Juta"
         elif total_val >= 1_000:
@@ -46,11 +45,10 @@ def render_primary_charts(df, std_map, metrics):
     
     selected_metric = metrics[0]
     if len(metrics) > 1:
-        selected_metric = st.selectbox("Pilih Metrik untuk Dilihat di Grafik:", metrics)
+        selected_metric = st.selectbox("Pilih Metrik Utama untuk Grafik:", metrics)
         
     c1, c2 = st.columns(2)
     
-    # Chart 1: Top Ranking Bar Chart
     with c1:
         st.markdown(f"**Peringkat Kategori Berdasarkan {selected_metric}**")
         df_grouped = df.groupby(cat_col)[selected_metric].sum().reset_index()
@@ -70,7 +68,6 @@ def render_primary_charts(df, std_map, metrics):
         fig_bar.update_traces(texttemplate='%{text:.2s}', textposition='outside')
         st.plotly_chart(fig_bar, use_container_width=True)
         
-    # Chart 2: Distribution / Donut Chart
     with c2:
         st.markdown(f"**Proporsi Distribusi {selected_metric}**")
         df_top = df_grouped.head(7)
@@ -84,6 +81,37 @@ def render_primary_charts(df, std_map, metrics):
         )
         fig_pie.update_layout(height=450)
         st.plotly_chart(fig_pie, use_container_width=True)
+
+def render_category_kpis(df, std_map, metrics):
+    """
+    Merender Indikator KPI Spesifik per Kategori/Wilayah (Sebelum Tabel Data).
+    """
+    st.markdown("---")
+    st.subheader("📌 Rincian Indikator Kunci per Kategori (Category Breakdown)")
+    
+    cat_col = std_map.get('category') or std_map.get('region')
+    
+    if not cat_col or not metrics:
+        return
+        
+    # Grouping per Kategori
+    summary_per_cat = df.groupby(cat_col)[metrics].sum().reset_index()
+    
+    # Cari Kategori Tertinggi & Terrendah untuk metrik utama
+    main_metric = metrics[0]
+    top_cat = summary_per_cat.sort_values(by=main_metric, ascending=False).iloc[0]
+    lowest_cat = summary_per_cat.sort_values(by=main_metric, ascending=True).iloc[0]
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.info(f"🏆 **Kategori Tertinggi ({main_metric}):**\n\n### {top_cat[cat_col]}\nNilai: **{top_cat[main_metric]:,.0f}**".replace(",", "."))
+        
+    with col2:
+        st.warning(f"🔻 **Kategori Terrendah ({main_metric}):**\n\n### {lowest_cat[cat_col]}\nNilai: **{lowest_cat[main_metric]:,.0f}**".replace(",", "."))
+        
+    with col3:
+        st.success(f"🔢 **Total Kategori Unik:**\n\n### {df[cat_col].nunique()} {cat_col.title()}\nMetrik Teranalisis: **{len(metrics)} Kolom**")
 
 def render_data_table(df):
     """

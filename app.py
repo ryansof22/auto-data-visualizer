@@ -55,20 +55,38 @@ if uploaded_file is not None:
         df, dimensions, metrics = categorize_columns(raw_df)
         std_map = get_standard_mapping(dimensions)
 
-        # Debug panel (opsional)
+        # Enhanced Debug panel (opsional) — tampilkan di sidebar dan di area utama
         if show_debug:
+            # Sidebar debug (ringkasan)
             st.sidebar.markdown("---")
             st.sidebar.write("Debug columns:", df.columns.tolist())
             st.sidebar.write("Debug dimensions:", dimensions)
             st.sidebar.write("Debug metrics:", metrics)
             st.sidebar.write("Debug std_map:", std_map)
-            st.sidebar.write("Debug head:")
-            st.sidebar.write(df.head(10))
+
+            # Main area debug (lebih lengkap)
+            st.markdown("---")
+            st.subheader("🔎 Debug: Struktur Data & Contoh")
+            st.write("Jumlah baris:", len(df))
+            st.write("Nama kolom terdeteksi:")
+            st.write(df.columns.tolist())
+
+            st.write("Contoh 10 baris pertama:")
+            st.dataframe(df.head(10), use_container_width=True)
 
             reg_col = std_map.get('region')
             if reg_col and reg_col in df.columns:
-                st.sidebar.write("Debug unique region:")
-                st.sidebar.write(df[reg_col].astype(str).value_counts().head(20))
+                st.write(f"Distribusi nilai pada kolom region ({reg_col}):")
+                vc = df[reg_col].astype(str).str.strip().value_counts(dropna=True)
+                # tampilkan tabel top 30
+                st.write(vc.head(30))
+                # tampilkan grafik ringkas
+                try:
+                    st.bar_chart(vc.head(20))
+                except Exception:
+                    pass
+            else:
+                st.write("Kolom region tidak terdeteksi atau tidak ada di dataset.")
 
         # Filter hierarki wilayah (hanya bila user mengaktifkan checkbox)
         df_filtered = df.copy()

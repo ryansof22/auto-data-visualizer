@@ -30,9 +30,12 @@ def render_kpi_cards(df, metrics):
                 delta=f"Rata-rata: {avg_val:,.1f}".replace(",", ".")
             )
 
-def render_primary_charts(df, std_map, metrics):
+def render_primary_charts(df, std_map, metrics, selected_metric=None):
     """
     Merender visualisasi grafik Plotly berdasarkan skema terdeteksi.
+
+    Jika selected_metric diberikan, gunakan itu dan jangan tampilkan selectbox;
+    jika None, tunjukkan selectbox di area utama seperti sebelumnya.
     """
     st.markdown("---")
     st.subheader("📊 Visualisasi & Analisis Komparatif")
@@ -43,10 +46,16 @@ def render_primary_charts(df, std_map, metrics):
         st.warning("Data tidak memiliki kombinasi kategori dan metrik angka yang cukup untuk membuat grafik.")
         return
     
-    selected_metric = metrics[0]
-    if len(metrics) > 1:
-        selected_metric = st.selectbox("Pilih Metrik Utama untuk Grafik:", metrics)
-        
+    # Jika tidak dipilih dari luar, tampilkan selectbox di area utama
+    if selected_metric is None:
+        selected_metric = metrics[0]
+        if len(metrics) > 1:
+            selected_metric = st.selectbox("Pilih Metrik Utama untuk Grafik:", metrics)
+    else:
+        # Pastikan selected_metric valid
+        if selected_metric not in metrics:
+            selected_metric = metrics[0]
+
     c1, c2 = st.columns(2)
     
     with c1:
@@ -82,9 +91,15 @@ def render_primary_charts(df, std_map, metrics):
         fig_pie.update_layout(height=450)
         st.plotly_chart(fig_pie, use_container_width=True)
 
-def render_category_kpis(df, std_map, metrics):
+    # kembalikan metrik yang digunakan agar caller bisa sinkron
+    return selected_metric
+
+def render_category_kpis(df, std_map, metrics, selected_metric=None):
     """
     Merender Indikator KPI Spesifik per Kategori/Wilayah (Sebelum Tabel Data).
+
+    Jika selected_metric diberikan, gunakan itu untuk konsistensi dengan grafik.
+    Jika None, pakai metrics[0].
     """
     st.markdown("---")
     st.subheader("📌 Rincian Indikator Kunci per Kategori (Category Breakdown)")
@@ -94,11 +109,22 @@ def render_category_kpis(df, std_map, metrics):
     if not cat_col or not metrics:
         return
         
+    main_metric = selected_metric if selected_metric in metrics else metrics[0]
+
     # Grouping per Kategori
-    summary_per_cat = df.groupby(cat_col)[metrics].sum().reset_index()
+    try:
+        summary_per_cat = df.groupby(cat_col)[[main_metric]].sum().reset_index()
+    except Exception:
+        # jika grouping gagal karena tipe, ubah ke numeric jika memungkinkan
+        df_copy = df.copy()
+        df_copy[main_metric] = pd.to_numeric(df_copy[main_metric], errors='coerce').fillna(0)
+        summary_per_cat = df_copy.groupby(cat_col)[[main_metric]].sum().reset_index()
     
+    if summary_per_cat.empty:
+        st.info("Tidak ada data untuk ditampilkan per kategori.")
+        return
+
     # Cari Kategori Tertinggi & Terrendah untuk metrik utama
-    main_metric = metrics[0]
     top_cat = summary_per_cat.sort_values(by=main_metric, ascending=False).iloc[0]
     lowest_cat = summary_per_cat.sort_values(by=main_metric, ascending=True).iloc[0]
     
@@ -112,6 +138,11 @@ def render_category_kpis(df, std_map, metrics):
         
     with col3:
         st.success(f"🔢 **Total Kategori Unik:**\n\n### {df[cat_col].nunique()} {cat_col.title()}\nMetrik Teranalisis: **{len(metrics)} Kolom**")
+
+    st.markdown("---")
+    st.subheader(f"Tabel KPI per {cat_col} (semua kelompok)")
+    # tampilkan table ringkasan
+    st.dataframe(summary_per_cat.sort_values(by=main_metric, ascending=False), use_container_width=True)
 
 def render_data_table(df):
     """
